@@ -9,11 +9,14 @@ Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
 Write-Host "[+] Firewall enabled for all profiles." -ForegroundColor Green
 
 # 2. Disable SMBv1 (Common vulnerability)
+$Smb1Feature = "SMB1Protocol"
+$EnabledState = "Enabled"
+
 Write-Host "[*] Checking SMBv1 status..."
-$smb1 = Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol
-if ($smb1.State -eq "Enabled") {
+$smb1 = Get-WindowsOptionalFeature -Online -FeatureName $Smb1Feature
+if ($smb1.State -eq $EnabledState) {
     Write-Host "[!] SMBv1 is enabled. Disabling..."
-    Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart
+    Disable-WindowsOptionalFeature -Online -FeatureName $Smb1Feature -NoRestart
     Write-Host "[+] SMBv1 disabled (Restart required to fully apply)." -ForegroundColor Green
 } else {
     Write-Host "[+] SMBv1 is already disabled." -ForegroundColor Green
