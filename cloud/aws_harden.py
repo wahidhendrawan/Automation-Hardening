@@ -1,5 +1,6 @@
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
+import concurrent.futures
 
 def run_audit():
     print("[*] Running AWS Audit...")
@@ -14,9 +15,11 @@ def audit_s3_public_access():
     try:
         response = s3.list_buckets()
         if 'Buckets' in response:
-            for bucket in response['Buckets']:
-                bucket_name = bucket['Name']
-                check_bucket_acl(s3, bucket_name)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # Wrap execution in futures to ensure exceptions are captured and re-raised
+                futures = [executor.submit(check_bucket_acl, s3, bucket['Name']) for bucket in response['Buckets']]
+                for future in concurrent.futures.as_completed(futures):
+                    future.result()
         else:
             print("[+] No buckets found.")
     except NoCredentialsError:
