@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1 - 2026-08-01
+
+- Added `docs/architecture.md` documenting CLI structure, provider architecture,
+  concurrent execution, and extension points.
+
 ## 0.10.0 - 2026-07-02
 
 - Added structured logging with JSON output, auto-redaction of secrets, and log rotation
