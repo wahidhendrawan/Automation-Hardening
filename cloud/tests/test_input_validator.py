@@ -201,18 +201,115 @@ class TestValidateWebhookUrl:
 
     def test_rejects_private_ip(self):
         """Should reject private IPs (SSRF protection)."""
-        with pytest.raises(ValidationError, match="private"):
+        with pytest.raises(ValidationError, match="non-public"):
             validate_webhook_url("https://192.168.1.1/webhook")
 
     def test_rejects_loopback(self):
         """Should reject loopback addresses."""
-        with pytest.raises(ValidationError, match="private"):
+        with pytest.raises(ValidationError, match="non-public"):
             validate_webhook_url("https://127.0.0.1/webhook")
 
     def test_rejects_empty(self):
         """Should reject empty URL."""
         with pytest.raises(ValidationError, match="empty"):
             validate_webhook_url("")
+
+    def test_rejects_dns_rebinding_to_private_ip(self, monkeypatch):
+        """Should reject a public-looking hostname that resolves to a
+        private address (DNS rebinding attack)."""
+        import socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 0)),
+            ]
+
+        monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+        with pytest.raises(ValidationError, match="non-public"):
+            validate_webhook_url("https://evil-rebind.example.com/webhook")
+
+    def test_rejects_dns_rebinding_to_loopback(self, monkeypatch):
+        """Should reject a hostname resolving to loopback."""
+        import socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0)),
+            ]
+
+        monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+        with pytest.raises(ValidationError, match="non-public"):
+            validate_webhook_url("https://sneaky.example.com/webhook")
+
+    def test_rejects_dns_rebinding_to_link_local(self, monkeypatch):
+        """Should reject a hostname resolving to a link-local/metadata
+        address (e.g. cloud metadata service 169.254.169.254)."""
+        import socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [
+                (
+                    socket.AF_INET,
+                    socket.SOCK_STREAM,
+                    6,
+                    "",
+                    ("169.254.169.254", 0),
+                ),
+            ]
+
+        monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+        with pytest.raises(ValidationError, match="non-public"):
+            validate_webhook_url("https://metadata.example.com/webhook")
+
+    def test_accepts_hostname_resolving_to_public_ip(self, monkeypatch):
+        """Should accept a hostname that resolves to a public address."""
+        import socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0)),
+            ]
+
+        monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+        url = "https://public.example.com/webhook"
+        assert validate_webhook_url(url) == url
+
+    def test_rejects_unresolvable_hostname(self, monkeypatch):
+        """Should reject a hostname that fails DNS resolution."""
+        import socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            raise socket.gaierror("Name or service not known")
+
+        monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+        with pytest.raises(ValidationError, match="resolve"):
+            validate_webhook_url("https://nonexistent.invalid/webhook")
+
+    def test_rejects_multicast_ip(self):
+        """Should reject literal multicast IPs."""
+        with pytest.raises(ValidationError, match="non-public"):
+            validate_webhook_url("https://224.0.0.1/webhook")
+
+    def test_rejects_invalid_hostname_format(self):
+        """Should reject a URL whose hostname fails format validation."""
+        with pytest.raises(ValidationError, match="Invalid hostname"):
+            validate_webhook_url("https://exa_mple..com/webhook")
+
+    def test_one_malicious_ip_among_many_is_blocked(self, monkeypatch):
+        """If any resolved address is private, the whole hostname is
+        blocked even if other addresses are public (DNS rebinding via
+        multiple A/AAAA records)."""
+        import socket
+
+        def fake_getaddrinfo(host, port, *args, **kwargs):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.1", 0)),
+            ]
+
+        monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+        with pytest.raises(ValidationError, match="non-public"):
+            validate_webhook_url("https://multi-record.example.com/webhook")
 
 
 class TestValidateFileSize:

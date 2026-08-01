@@ -220,3 +220,142 @@ class TestRunAudit:
         scan_args.path = str(plan_file)
         findings = run_audit(scan_args)
         assert len(findings) == 0
+
+
+class TestBoundedParsing:
+    """Regression tests for DoS-resistant bounded plan parsing."""
+
+    def test_rejects_oversized_plan_file(self, tmp_path, scan_args, monkeypatch):
+        """Should reject plan files exceeding the byte limit."""
+        import cloud.terraform_plan as tp
+
+        # Lower the limit to make the test fast and deterministic.
+        monkeypatch.setattr(tp, "_MAX_PLAN_BYTES", 100)
+        plan_file = tmp_path / "big.json"
+        # Write valid JSON that exceeds 100 bytes.
+        plan_file.write_text(
+            json.dumps({"resource_changes": [], "padding": "x" * 500}),
+            encoding="utf-8",
+        )
+        findings = audit_plan(str(plan_file), scan_args)
+        assert len(findings) == 1
+        assert findings[0].status == Status.ERROR
+        assert "maximum size" in findings[0].evidence.lower()
+
+    def test_rejects_too_many_resource_changes(
+        self, tmp_path, scan_args, monkeypatch
+    ):
+        """Should reject plans with too many resource_changes entries."""
+        import cloud.terraform_plan as tp
+
+        monkeypatch.setattr(tp, "_MAX_RESOURCE_CHANGES", 5)
+        plan = {
+            "resource_changes": [
+                _resource_change(
+                    "aws_instance", f"module.ec2[{i}]", {"size": 1}
+                )
+                for i in range(10)
+            ]
+        }
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(json.dumps(plan), encoding="utf-8")
+        findings = audit_plan(str(plan_file), scan_args)
+        assert len(findings) == 1
+        assert findings[0].status == Status.ERROR
+        assert "maximum" in findings[0].evidence.lower()
+
+    def test_rejects_non_object_root(self, tmp_path, scan_args):
+        """Should reject a plan whose JSON root is not an object."""
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+        findings = audit_plan(str(plan_file), scan_args)
+        assert len(findings) == 1
+        assert findings[0].status == Status.ERROR
+        assert "object" in findings[0].evidence.lower()
+
+    def test_rejects_non_array_resource_changes(self, tmp_path, scan_args):
+        """Should reject resource_changes that is not a JSON array."""
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(
+            json.dumps({"resource_changes": {"not": "array"}}),
+            encoding="utf-8",
+        )
+        findings = audit_plan(str(plan_file), scan_args)
+        assert len(findings) == 1
+        assert findings[0].status == Status.ERROR
+        assert "array" in findings[0].evidence.lower()
+
+    def test_rejects_non_object_change_entry(self, tmp_path, scan_args):
+        """Should reject a resource_changes entry that is not an object."""
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(
+            json.dumps({"resource_changes": ["not-an-object"]}),
+            encoding="utf-8",
+        )
+        findings = audit_plan(str(plan_file), scan_args)
+        assert len(findings) == 1
+        assert findings[0].status == Status.ERROR
+        assert "object" in findings[0].evidence.lower()
+
+    def test_rejects_non_object_change_field(self, tmp_path, scan_args):
+        """Should reject an entry whose 'change' field is not an object."""
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(
+            json.dumps(
+                {
+                    "resource_changes": [
+                        {"type": "aws_instance", "change": "bad"}
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        findings = audit_plan(str(plan_file), scan_args)
+        assert len(findings) == 1
+        assert findings[0].status == Status.ERROR
+
+    def test_rejects_non_array_actions(self, tmp_path, scan_args):
+        """Should reject an entry whose change.actions is not an array."""
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(
+            json.dumps(
+                {
+                    "resource_changes": [
+                        {
+                            "type": "aws_instance",
+                            "change": {"actions": "create", "after": {}},
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        findings = audit_plan(str(plan_file), scan_args)
+        assert len(findings) == 1
+        assert findings[0].status == Status.ERROR
+        assert "actions" in findings[0].evidence.lower()
+
+    def test_handles_malformed_after_gracefully(self, tmp_path, scan_args):
+        """A non-dict 'after' should not crash the checkers."""
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(
+            json.dumps(
+                {
+                    "resource_changes": [
+                        {
+                            "type": "aws_s3_bucket",
+                            "address": "module.b",
+                            "change": {
+                                "actions": ["create"],
+                                "after": "not-a-dict",
+                            },
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        findings = audit_plan(str(plan_file), scan_args)
+        # No crash; a bucket with no readable attributes yields no findings
+        # or an unencrypted finding, but must not raise.
+        assert isinstance(findings, list)
