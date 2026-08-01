@@ -1,17 +1,19 @@
 ---
 name: Feature Request
-about: Suggest a new feature or improvement
-labels: enhancement
+about: Suggest an idea for improving PagerWesi
+labels: "enhancement, needs-triage"
+assignees: ''
+
 ---
 
-## Problem
+**Is your feature request related to a problem? Please describe.**
+A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 
-<!-- What problem does this solve? -->
+**Describe the Solution You'd Like**
+A clear and concise description of what you want to happen.
 
-## Proposed Solution
+**Describe Alternatives You've Considered**
+A clear and concise description of any alternative solutions or features you've considered.
 
-<!-- How should it work? -->
-
-## Alternatives Considered
-
-<!-- Other approaches you've thought about -->
+**Additional Context**
+Add any other context or screenshots about the feature request here.
