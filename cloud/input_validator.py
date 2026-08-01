@@ -257,44 +257,58 @@ def validate_aws_region(region: str) -> str:
     return region
 
 
+def _is_unsafe_webhook_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return whether an address is unsuitable for an outbound webhook."""
+    return not address.is_global or address.is_multicast
+
+
 def validate_webhook_url(url: str) -> str:
-    """Validate a webhook URL for security.
+    """Validate an HTTPS webhook URL and all currently resolved addresses."""
+    import socket
 
-    Args:
-        url: The webhook URL to validate.
-
-    Returns:
-        The validated URL.
-
-    Raises:
-        ValidationError: If the URL is invalid or uses an unsafe scheme.
-    """
     if not url:
         raise ValidationError("url", "URL cannot be empty")
 
     parsed = urlparse(url)
-
-    if parsed.scheme not in ("https",):
+    if parsed.scheme != "https":
         raise ValidationError("url", f"Only HTTPS URLs are allowed, got scheme: {parsed.scheme}")
-
     if not parsed.hostname:
         raise ValidationError("url", "URL must have a valid hostname")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValidationError("url", "Webhook URLs must not contain user credentials")
 
-    # Prevent SSRF to internal networks
+    try:
+        port = parsed.port or 443
+    except ValueError as exc:
+        raise ValidationError("url", "URL contains an invalid port") from exc
+
     hostname = parsed.hostname
     try:
-        addr = ipaddress.ip_address(hostname)
+        addresses = [ipaddress.ip_address(hostname)]
     except ValueError:
-        # It's a hostname, not an IP — validate the hostname format
-        if not _HOSTNAME_PATTERN.match(hostname):
+        if not _HOSTNAME_PATTERN.fullmatch(hostname):
+            raise ValidationError("url", f"Invalid hostname in URL: {hostname}") from None
+        try:
+            infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+        except socket.gaierror as exc:
+            raise ValidationError("url", f"Cannot resolve hostname: {hostname}") from exc
+
+        addresses = []
+        for _family, _type, _proto, _canonname, sockaddr in infos:
+            try:
+                addresses.append(ipaddress.ip_address(sockaddr[0]))
+            except ValueError:
+                continue
+        if not addresses:
             raise ValidationError(
-                "url", f"Invalid hostname in URL: {hostname}"
+                "url", f"Hostname resolves to no IP addresses: {hostname}"
             ) from None
-    else:
-        if addr.is_private or addr.is_loopback or addr.is_link_local:
+
+    for address in addresses:
+        if _is_unsafe_webhook_address(address):
             raise ValidationError(
                 "url",
-                "URLs pointing to private/internal networks are not allowed",
+                f"Webhook target resolves to non-public address {address}",
             )
 
     return url

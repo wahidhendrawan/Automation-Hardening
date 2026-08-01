@@ -36,7 +36,13 @@ def _finding(control_id: str, title: str, status: Status, severity: Severity,
 
 def _check_tls_version(host: str, port: int) -> Finding:
     """NET-TLS-001: TLS 1.2 or higher."""
-    _SCAN_RATE_LIMITER.acquire(timeout=30)
+    if not _SCAN_RATE_LIMITER.acquire(timeout=30):
+        return _finding(
+            "NET-TLS-001", "TLS 1.2 or higher",
+            Status.ERROR, Severity.HIGH, f"{host}:{port}",
+            "Rate limiter timeout: too many concurrent scans",
+            "Reduce scan concurrency or endpoint count.",
+        )
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -71,7 +77,13 @@ def _check_tls_version(host: str, port: int) -> Finding:
 
 def _check_cert_validity(host: str, port: int) -> Finding:
     """NET-TLS-002: Valid certificate."""
-    _SCAN_RATE_LIMITER.acquire(timeout=30)
+    if not _SCAN_RATE_LIMITER.acquire(timeout=30):
+        return _finding(
+            "NET-TLS-002", "Valid TLS certificate",
+            Status.ERROR, Severity.HIGH, f"{host}:{port}",
+            "Rate limiter timeout: too many concurrent scans",
+            "Reduce scan concurrency or endpoint count.",
+        )
     ctx = ssl.create_default_context()
     try:
         with socket.create_connection((host, port), timeout=_CONNECT_TIMEOUT) as sock:
@@ -113,7 +125,14 @@ def _check_open_ports(
     for port in ports:
         if port in expected:
             continue
-        _SCAN_RATE_LIMITER.acquire(timeout=30)
+        if not _SCAN_RATE_LIMITER.acquire(timeout=30):
+            findings.append(_finding(
+                "NET-PORT-001", "Unexpected open port",
+                Status.ERROR, Severity.HIGH, f"{host}:{port}",
+                "Rate limiter timeout during port scan",
+                "Reduce scan concurrency.",
+            ))
+            continue
         try:
             with socket.create_connection(
                 (host, port), timeout=_PORT_SCAN_TIMEOUT

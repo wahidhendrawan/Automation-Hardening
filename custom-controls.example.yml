@@ -11,9 +11,9 @@ controls:
     remediation: "Configure /etc/resolv.conf to use internal DNS."
 
   - id: CUSTOM-NTP-001
-    title: NTP synchronization is active
+    title: NTP synchronization service is active
     target: time
     severity: low
-    check: "timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -q yes"
+    check: "systemctl is-active --quiet systemd-timesyncd"
     expect: 0
     remediation: "Enable and configure NTP: timedatectl set-ntp true"

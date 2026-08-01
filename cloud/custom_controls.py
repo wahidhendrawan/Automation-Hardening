@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -15,10 +16,32 @@ def _severity(value: str) -> Severity:
 
 
 def _run_check(command: str) -> tuple[int, str]:
-    result = subprocess.run(
-        command, shell=True, capture_output=True, text=True, timeout=30
-    )
-    return result.returncode, result.stdout.strip() or result.stderr.strip()
+    """Execute a check command without invoking a shell.
+
+    The command string is tokenized with ``shlex`` and executed directly
+    (``shell=False``) to eliminate shell metacharacter/command-injection
+    risk from custom-control definitions. Simple executable-and-argument
+    commands (for example, ``grep -q 'x' file``) continue to work. Shell
+    operators such as pipes, redirects, globbing, and variable expansion
+    are passed as literal arguments and are never interpreted.
+    """
+    try:
+        args = shlex.split(command)
+    except ValueError as exc:
+        return 1, f"Invalid command syntax: {exc}"
+
+    if not args:
+        return 1, "Empty command"
+
+    try:
+        result = subprocess.run(
+            args, shell=False, capture_output=True, text=True, timeout=30
+        )
+        return result.returncode, result.stdout.strip() or result.stderr.strip()
+    except FileNotFoundError:
+        return 127, f"Command not found: {args[0]}"
+    except subprocess.TimeoutExpired:
+        return 124, "Command timed out after 30s"
 
 
 def load_custom_controls(path: Path) -> list[dict]:
