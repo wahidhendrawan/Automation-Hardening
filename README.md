@@ -389,4 +389,4 @@ informative and do not constitute certification.
 - Use an approved recovery-key escrow process before enabling FileVault or BitLocker.
 - Treat generated reports as sensitive because they contain resource identifiers and posture data.
 
-This project is provided under the GPL-3.0-or-later license without warranty.
+This project is provided under the GPL-3.0 license without warranty.
