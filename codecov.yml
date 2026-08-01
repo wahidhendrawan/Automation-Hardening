@@ -1,0 +1,18 @@
+# codecov.yml
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+    patch:
+      default:
+        target: 80%
+comment:
+  layout: "header, diff"
+  behavior: default
+
+flags:
+  unittests:
+    paths:
+      - cloud/

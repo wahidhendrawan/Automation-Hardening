@@ -1,7 +1,7 @@
 .PHONY: test test-os typecheck lint security docs
 
 test:
-	python -m pytest --cov=cloud --cov-report=term-missing
+	python -m pytest --cov=cloud --cov-report=term-missing --cov-fail-under=60
 
 test-os:
 	bats tests/os/linux_harden.bats

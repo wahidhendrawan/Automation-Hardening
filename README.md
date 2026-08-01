@@ -5,6 +5,7 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL-3.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.10.0-green.svg)](https://github.com/wahidhendrawan/PagerWesi/releases)
 [![CI](https://github.com/wahidhendrawan/PagerWesi/actions/workflows/ci.yml/badge.svg)](https://github.com/wahidhendrawan/PagerWesi/actions)
+[![Coverage](https://codecov.io/gh/wahidhendrawan/PagerWesi/branch/main/graph/badge.svg)](https://codecov.io/gh/wahidhendrawan/PagerWesi)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
 [![CIS Compliance](https://img.shields.io/badge/CIS%20Compliance-SOC2%2FPCI--DSS-0052CC)](docs/)
