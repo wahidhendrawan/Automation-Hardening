@@ -1,0 +1,5 @@
+# Gitleaks ignore file
+# False positives: test data with intentional hardcoded secrets for testing purposes
+
+# Test files with intentional dummy tokens/credentials for secrets scanner testing
+cloud/tests/test_secrets_scanner.py:gitlab-pat:65
